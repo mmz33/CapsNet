@@ -81,7 +81,7 @@ class CapsuleLayer:
     elif kernel_size is None and strides is None:
       # DigitCapsLayer
       # Here we need to apply the routing mechanism
-      pass
+      return self.routing(inputs)
     else:
       raise ValueError('kernel_size and strides params should be either both None \
                        (for DigitCaps) or both not None (for PrimaryCaps)')
@@ -128,7 +128,7 @@ class CapsuleLayer:
     # this will result in a matrix of all predicated capsule vectors for all i and j
     # each entry is u_hat_ij = W_ij x u_i
     # => [batch_size, 1152, 10, 16, 1]
-    pred_out_vectors = tf.matmul(W_tiled, caps1_out_tiled, name='pred_out_vectors')
+    u_hat_vectors = tf.matmul(W_tiled, caps1_out_tiled, name='u_hat_vectors')
 
     # Line 2: create temporary weighting coefficients and initialize to zero
     # => [batch_size, 1152, 10, 1, 1]
@@ -144,20 +144,29 @@ class CapsuleLayer:
       # Line 5: compute the weighted sum for all capsule j in layer l+1
       # element-wise multiplication
       # => [batch_size, 1152, 10, 16, 1]
-      weighted_pred = tf.multiply(c_i, pred_out_vectors, name='weighted_predictions')
+      weighted_pred = tf.multiply(c_i, u_hat_vectors, name='weighted_predictions')
 
       # => [batch_size, 1, 10, 16, 1]
       s_j  = tf.reduce_sum(weighted_pred,
-                                    axis=1,
-                                    keepdims=True,
-                                    name='weighed_sum')
+                           axis=1,
+                           keepdims=True,
+                           name='weighed_sum')
 
       # Line 6: Apply squash function
       # => [batch_size, 1, 10, 16, 1]
       v_j = self.squash(s_j, axis=-2)
 
       # Line 7: update the b_ij variables to be used to update the c_ij variables
-      pass
+      # => [batch_size, 1152, 10, 16, 1]
+      v_j_tiled = tf.tile(v_j, [1, num_out_caps, 1, 1, 1], name='v_j_tiled')
+
+      # u_hat_ij * v_j
+      # => [batch_size, 1152, 10, 16, 1]
+      agreement = tf.matmul(u_hat_vectors, v_j_tiled, transpose_a=True, name='agreement')
+
+      b_ij = tf.add(b_ij, agreement, name='temp_weighting_coeff_update')
+
+    return v_j
 
   @staticmethod
   def squash(s_j, axis=-1, name=None):
