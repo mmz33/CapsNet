@@ -174,7 +174,7 @@ class CapsuleLayer:
     return v_j
 
   @staticmethod
-  def squash(s_j, axis=-1, name=None):
+  def squash(s_j, axis=-1, epsilon=1e-7, name=None):
     """Non-linearity Squashing function
 
     The length of the capsule's activity vector represents the probability that the
@@ -182,6 +182,11 @@ class CapsuleLayer:
     to be in the range [0,1].
 
     Implementation ref: https://arxiv.org/abs/1710.09829
+
+    Note that here we can't use tf.norm since the norm of the vector
+    might be zero and so the training process will blow up with
+    nans. Thus, we need to implement it manually by adding a tiny
+    variable epsilon to tackle this problem.
 
     :param s_j: 3-D tensor, [batch_size, capsules, vector_length]
       we want to squash `vector_length` of the activity vector of capsule j
@@ -196,7 +201,7 @@ class CapsuleLayer:
                                    axis=axis,
                                    keepdims=True)
 
-      s_j_norm = tf.sqrt(squared_norm)
+      s_j_norm = tf.sqrt(squared_norm + epsilon)
 
       # unit scaling (second part of the equation)
       s_j_unit_scale = s_j / s_j_norm
