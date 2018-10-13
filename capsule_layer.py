@@ -1,4 +1,5 @@
 import tensorflow as tf
+from engine import get_from_config
 
 class CapsuleLayer:
   """Represents a Capsule Layer
@@ -85,7 +86,7 @@ class CapsuleLayer:
       raise ValueError('kernel_size and strides params should be either both None \
                        (for DigitCaps) or both not None (for PrimaryCaps)')
 
-  def routing(self, inputs, num_out_caps=10, v_j_len=16, r=3):
+  def routing(self, inputs, num_out_caps=10, v_j_len=16):
     """ Dynamic Routing Algorithm
 
     :param inputs: A 3-D tensor, [batch_size, num_caps_l, act_len].
@@ -104,7 +105,7 @@ class CapsuleLayer:
     # Create transformation weight matrix variable
     W_ij = tf.get_variable(name='Weight',
                            shape=[1, num_caps_l, num_out_caps, v_j_len, self.act_vec_len],
-                           initializer=tf.random_normal_initializer(stddev=0.1))
+                           initializer=tf.random_normal_initializer(stddev=get_from_config('stddev')))
 
     # Replicate W_ij for batch_size copies
     # Output shape: [batch_size, 1152, 10, 16, 8]
@@ -137,7 +138,7 @@ class CapsuleLayer:
                     dtype=tf.float32,
                     name='temp_weighting_coeff')
 
-    for r_iter in range(r):
+    for r_iter in range(get_from_config('routing_iterations')):
       # Line 4: apply softmax on b_i for all capsule i in layer l
 
       # Output shape: [batch_size, 1152, 10, 1, 1]
