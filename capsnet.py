@@ -1,6 +1,7 @@
 import tensorflow as tf
 from capsule_layer import CapsuleLayer
 from engine import get_from_config
+from dataset import get_batch_data
 
 class CapsNet:
   """Represents CapsNet Architecture
@@ -45,11 +46,33 @@ class CapsNet:
     self.graph = tf.Graph()
 
     with self.graph.as_default():
-
-      # TODO: Read the dataset and create placeholders here
-      # TODO: self.X and self.Y should be defined here
       if is_training:
-        pass
+        self.X, self.labels = get_batch_data()
+        self.Y = tf.one_hot(self.labels,
+                            depth=self.num_of_labels,
+                            axis=1,
+                            dtype=tf.float32,
+                            name='train_Y')
+
+        self.build_capsnet()
+        self.loss()
+        self._summary()
+        self.global_step = tf.Variable(0, trainable=False, name='global_step')
+        self.optimizer = tf.train.AdamOptimizer()
+        self.train_op = self.optimizer.minimize(self.total_loss,
+                                                global_step=self.global_step,
+                                                name='train_op')
+      else:
+        self.X = tf.placeholder(dtype=tf.float32,
+                                shape=(self.batch_size, height, width, channels),
+                                name='test_X')
+        self.labels = tf.placeholder(dtype=tf.int32,
+                                     shape=(self.batch_size,),
+                                     name='test_labels')
+        self.Y = tf.reshape(self.labels,
+                            shape=(self.batch_size, self.num_of_labels, 1),
+                            name='test_Y')
+        self.build_capsnet()
 
   @staticmethod
   def safe_norm(s, axis=-1, epsilon=1e-7, keep_dims=False, name=None):
@@ -98,7 +121,8 @@ class CapsNet:
     y_probs_argmax = tf.argmax(self.y_probs, axis=2, name="y_probs_argmax")
 
     # (batch_size,)
-    y_pred = tf.squeeze(y_probs_argmax, axis=[1, 2], name="y_pred")
+    # or reshape with shape=(batch_size,)
+    self.y_pred = tf.squeeze(y_probs_argmax, axis=[1, 2], name="y_pred")
 
     # For the reconstruction, we need to mask out all the output
     # activity vectors except the longest one. For that, we need
@@ -110,7 +134,7 @@ class CapsNet:
       # - y_pred  otherwise
       reconst_targets = tf.cond(self.mask_with_labels,
                                 lambda: self.Y,
-                                lambda: y_pred,
+                                lambda: self.y_pred,
                                 name='reconst_targets')
 
       # Create reconstruction mask
@@ -184,7 +208,7 @@ class CapsNet:
                                       shape=[-1, self.num_of_labels],
                                       name='incorrect_label_loss')
 
-    margin_loss = tf.add(T_k * correct_label_loss, (1 - T_k) * incorrect_label_loss,
+    self.margin_loss = tf.add(T_k * correct_label_loss, (1 - T_k) * incorrect_label_loss,
                          name='margin_loss')
 
     # 2. reconstruction loss
@@ -197,8 +221,30 @@ class CapsNet:
     squared_diff = tf.square(X_flat - self.decoder_output,
                              name='squared_diff')
 
-    reconst_loss = tf.reduce_mean(squared_diff, name='reconst_loss')
+    self.reconst_loss = tf.reduce_mean(squared_diff, name='reconst_loss')
 
-    total_loss = tf.add(margin_loss, lambda_ * reconst_loss, name='total_loss')
+    self.total_loss = tf.add(self.margin_loss, lambda_ * self.reconst_loss, name='total_loss')
 
-    return total_loss
+  def compute_accuracy(self):
+    correct_pred = tf.equal(self.labels, self.y_pred, name='correct_pred')
+    self.accuracy = tf.reduce_sum(tf.cast(correct_pred, tf.float32), name='accuracy')
+
+  def _summary(self):
+    train_summary = []
+
+    # Add the loss values to the summary
+    train_summary.append(tf.summary.scalar('train/margin_loss', self.margin_loss))
+    train_summary.append(tf.summary.scalar('train/reconstruction_loss', self.reconst_loss))
+    train_summary.append(tf.summary.scalar('train/total_loss', self.total_loss))
+
+    # Add reconstructed image
+    reconst_image = tf.reshape(self.decoder_output,
+                               shape=(self.batch_size, self.height, self.width, self.channels))
+    train_summary.append(tf.summary.image('reconstructed_image', reconst_image))
+
+    self.compute_accuracy()
+    train_summary.append(tf.summary.scalar('train/accuracy', self.accuracy))
+
+    # Merge all the summaries
+    self.train_summary = tf.summary.merge(train_summary)
+
