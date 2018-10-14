@@ -5,6 +5,11 @@ config = {
   'routing_iterations': 3,
   'stddev': 0.01,
 
+  # For dataset
+  'train_data_path': 'data/train.csv',
+  'test_data_path' : 'data/test.csv',
+  'number_of_threads': 4,
+
   # For margin loss
   'm_plus': 0.9,
   'm_minus': 0.1,
