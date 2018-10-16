@@ -75,15 +75,30 @@ class CapsNet:
         self.build_capsnet()
 
   @staticmethod
-  def safe_norm(s, axis=-1, epsilon=1e-7, keep_dims=False, name=None):
+  def safe_norm(s, axis=-1, epsilon=1e-7, keepdims=False, name=None):
+    """Computes the norm of s avoiding nan problem (0 norm)
+
+    It uses epsilon to make sure tf.sqrt(squared_norm + epsilon)
+    will not output nan when squared_norm is 0
+
+    :param s: A 4-D tf.Tensor
+    :param axis: An integer, axis on which to apply safe_norm
+    :param epsilon: A float, used to avoid nan problem
+    :param keepdims: If true, retains reduced dimensions with length 1.
+    :param name: A string, the name of the scope
+    :return: A tensor, norm of tensor s
+    """
+
     with tf.name_scope(name, default_name='safe_norm'):
       squared_norm = tf.reduce_sum(tf.square(s),
                                    axis=axis,
-                                   keepdims=keep_dims)
+                                   keepdims=keepdims)
 
       return tf.sqrt(squared_norm + epsilon)
 
   def build_capsnet(self):
+    """Builds the CapsNet Architecture"""
+
     # 1.Encoder
 
     # Convolutional Layer
@@ -226,10 +241,14 @@ class CapsNet:
     self.total_loss = tf.add(self.margin_loss, lambda_ * self.reconst_loss, name='total_loss')
 
   def compute_accuracy(self):
+    """Compute the prediction accuracy"""
+
     correct_pred = tf.equal(self.labels, self.y_pred, name='correct_pred')
     self.accuracy = tf.reduce_sum(tf.cast(correct_pred, tf.float32), name='accuracy')
 
   def _summary(self):
+    """Merges training summaries"""
+
     train_summary = []
 
     # Add the loss values to the summary
