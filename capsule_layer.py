@@ -71,6 +71,8 @@ class CapsuleLayer:
       # Output shape: [batch_size, 1152, 8]
       capsules = tf.reshape(conv_out, shape=[inputs[0], -1, self.act_vec_len])
 
+      assert capsules.get_shape() == [inputs[0], 1152, 8]
+
       # Apply squashing non-linearity function
       # Squash on the capsules vectors axis
       squashed_capsules = self.squash(capsules)
@@ -111,25 +113,35 @@ class CapsuleLayer:
     # Output shape: [batch_size, 1152, 10, 16, 8]
     W_tiled = tf.tile(W_ij, [batch_size, 1, 1, 1, 1], name='W_tiled')
 
+    assert W_tiled.get_shape().as_list() == [batch_size, 1152, 10, 16, 8]
+
     # Each previous layer output capsule is `act_vec_len` dimension
     # So, we need to expand the dimension by adding 1 at the end so that we
     # We can apply the matrix multiplication later with W_tiled later
     # Output shape: [batch_size, 1152, 8, 1]
     caps1_out_expand1 = tf.expand_dims(inputs, -1, name='caps1_out_expand1')
 
+    assert caps1_out_expand1.get_shape().as_list() == [batch_size, 1152, 8, 1]
+
     # We also need to expand the dimension at axis 2 since we need to replicate (tf.tile)
     # for `num_out_caps` (10) copies to multiply with W_tiled
     # Output shape: [batch_size, 1152, 1, 8, 1]
     caps1_out_expand2 = tf.expand_dims(caps1_out_expand1, 2, name='caps1_out_expand2')
 
+    assert caps1_out_expand2.get_shape().as_list() == [batch_size, 1152, 1, 8, 1]
+
     # Apply tf.tile
     # Output shape: [batch_size, 1152, 10, 8, 1]
     caps1_out_tiled = tf.tile(caps1_out_expand2, [1, 1, num_out_caps, 1, 1], 'caps1_out_tiled')
+
+    assert caps1_out_tiled.get_shape().as_list() == [batch_size, 1152, 10, 8, 1]
 
     # This will result in a matrix of all predicated capsule vectors for all i and j
     # Each entry is u_hat_ij = W_ij x u_i
     # Output shape: [batch_size, 1152, 10, 16, 1]
     u_hat_vectors = tf.matmul(W_tiled, caps1_out_tiled, name='u_hat_vectors')
+
+    assert u_hat_vectors.get_shape().as_list() == [batch_size, 1152, 10, 16, 1]
 
     # Line 2: create temporary weighting coefficients and initialize to zero
 
@@ -138,11 +150,15 @@ class CapsuleLayer:
                     dtype=tf.float32,
                     name='temp_weighting_coeff')
 
+    assert b_ij.get_shape().as_list() == [batch_size, 1152, 10, 1, 1]
+
     for r_iter in range(get_from_config('routing_iterations')):
       # Line 4: apply softmax on b_i for all capsule i in layer l
 
       # Output shape: [batch_size, 1152, 10, 1, 1]
       c_i = tf.nn.softmax(b_ij, axis=2, name='weighting_coefficients')
+
+      assert c_i.get_shape().as_list() == [batch_size, 1152, 10, 1, 1]
 
       # Line 5: compute the weighted sum for all capsule j in layer l+1
 
@@ -150,25 +166,35 @@ class CapsuleLayer:
       # Output shape: [batch_size, 1152, 10, 16, 1]
       weighted_pred = tf.multiply(c_i, u_hat_vectors, name='weighted_predictions')
 
+      assert weighted_pred.get_shape().as_list() == [batch_size, 1152, 10, 16, 1]
+
       # Output shape: [batch_size, 1, 10, 16, 1]
       s_j  = tf.reduce_sum(weighted_pred,
                            axis=1,
                            keepdims=True,
                            name='weighed_sum')
 
+      assert s_j.get_shape().as_list() == [batch_size, 1, 10, 16, 1]
+
       # Line 6: Apply squash function
 
       # Output shape: [batch_size, 1, 10, 16, 1]
       v_j = self.squash(s_j, axis=-2)
+
+      assert v_j.get_shape().as_list() == [batch_size, 1, 10, 16, 1]
 
       # Line 7: update the b_ij variables to be used to update the c_ij variables
 
       # Output shape: [batch_size, 1152, 10, 16, 1]
       v_j_tiled = tf.tile(v_j, [1, num_out_caps, 1, 1, 1], name='v_j_tiled')
 
+      assert v_j_tiled.get_shape().as_list() == [batch_size, 1152, 10, 16, 1]
+
       # u_hat_ij * v_j
       # Output shape: [batch_size, 1152, 10, 16, 1]
       agreement = tf.matmul(u_hat_vectors, v_j_tiled, transpose_a=True, name='agreement')
+
+      assert agreement.get_shape().as_list() == [batch_size, 1152, 10, 16, 1]
 
       b_ij = tf.add(b_ij, agreement, name='temp_weighting_coeff_update')
 

@@ -122,7 +122,7 @@ class CapsNet:
                                       act_vec_len=16)
       digit_capsules = digit_caps_layer(primary_capsules)
 
-      assert digit_capsules.get_shape() == \
+      assert digit_capsules.get_shape().as_list() == \
              [self.batch_size, self.num_of_labels, 16, 1]
 
     # 2.Decoder
@@ -131,13 +131,19 @@ class CapsNet:
     # From [batch_size, 10, 16, 1] to [batch_size, 10, 1, 1]
     self.y_probs = self.safe_norm(digit_caps_layer, axis=-2, name='y_probs')
 
+    assert self.y_probs.get_shape().as_list() == [self.batch_size, 10, 1, 1]
+
     # This is the index of the vector (class) having the largest length
     # Output shape: [batch_size, 1, 1]
     y_probs_argmax = tf.argmax(self.y_probs, axis=2, name="y_probs_argmax")
 
+    assert y_probs_argmax.get_shape().as_list() == [self.batch_size, 1, 1]
+
     # (batch_size,)
     # or reshape with shape=(batch_size,)
     self.y_pred = tf.squeeze(y_probs_argmax, axis=[1, 2], name="y_pred")
+
+    assert self.y_pred.get_shape().as_list() == (self.batch_size,)
 
     # For the reconstruction, we need to mask out all the output
     # activity vectors except the longest one. For that, we need
@@ -158,6 +164,8 @@ class CapsNet:
                                 depth=self.num_of_labels,
                                 name='reconst_mask')
 
+      assert reconst_mask.get_shape().as_list() == [self.batch_size, 10]
+
       # The shape of digit_capsules is [batch_size, 1, 10, 16, 1]
       # Then, we need to reshape the reconstruction mask to apply it
       reconst_mask_reshaped = tf.reshape(reconst_mask,
@@ -169,6 +177,8 @@ class CapsNet:
       masked_output = tf.multiply(digit_capsules,
                                   reconst_mask_reshaped,
                                   name='masked_output')
+
+      assert masked_output.get_shape().as_list() == [self.batch_size, 1, 16, 1]
 
       # Flatten the masked output vector to be used in the fully connected layers
       masked_output_flattened = tf.reshape(masked_output,
@@ -208,7 +218,7 @@ class CapsNet:
     max_l = tf.square(tf.maximum(0., m_plus - self.y_probs),
                       name='max_l')
 
-    assert max_l.get_shape() == [self.batch_size, self.num_of_labels, 1]
+    assert max_l.get_shape().as_list() == [self.batch_size, self.num_of_labels, 1]
 
     correct_label_loss = tf.reshape(max_l,
                                     shape=[-1, self.num_of_labels],
@@ -217,7 +227,7 @@ class CapsNet:
     max_r = tf.square(tf.maximum(0., self.y_probs - m_minus),
                       name='max_r')
 
-    assert max_r.get_shape() == [self.batch_size, self.num_of_labels, 1]
+    assert max_r.get_shape().as_list() == [self.batch_size, self.num_of_labels, 1]
 
     incorrect_label_loss = tf.reshape(max_r,
                                       shape=[-1, self.num_of_labels],
