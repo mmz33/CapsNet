@@ -1,7 +1,6 @@
 import tensorflow as tf
 from capsule_layer import CapsuleLayer
 from engine import get_from_config
-from dataset import get_batch_data
 
 class CapsNet:
   """Represents CapsNet Architecture
@@ -47,14 +46,13 @@ class CapsNet:
 
     with self.graph.as_default():
       if is_training:
-        self.X, self.labels = get_batch_data()
-        self.Y = tf.one_hot(self.labels,
-                            depth=self.num_of_labels,
-                            axis=1,
-                            dtype=tf.float32,
-                            name='train_Y')
+        self.X = tf.placeholder(dtype=tf.float32,
+                                shape=(self.batch_size, height, width, channels),
+                                name='train_X')
 
-        self.build_capsnet()
+        self.Y = tf.placeholder(dtype=tf.int32,
+                                shape=(self.batch_size,),
+                                name='train_Y')
         self.loss()
         self._summary()
         self.global_step = tf.Variable(0, trainable=False, name='global_step')
@@ -66,13 +64,7 @@ class CapsNet:
         self.X = tf.placeholder(dtype=tf.float32,
                                 shape=(self.batch_size, height, width, channels),
                                 name='test_X')
-        self.labels = tf.placeholder(dtype=tf.int32,
-                                     shape=(self.batch_size,),
-                                     name='test_labels')
-        self.Y = tf.reshape(self.labels,
-                            shape=(self.batch_size, self.num_of_labels, 1),
-                            name='test_Y')
-        self.build_capsnet()
+      self.build_capsnet()
 
   @staticmethod
   def safe_norm(s, axis=-1, epsilon=1e-7, keepdims=False, name=None):
@@ -253,7 +245,7 @@ class CapsNet:
   def compute_accuracy(self):
     """Compute the prediction accuracy"""
 
-    correct_pred = tf.equal(self.labels, self.y_pred, name='correct_pred')
+    correct_pred = tf.equal(self.Y, self.y_pred, name='correct_pred')
     self.accuracy = tf.reduce_sum(tf.cast(correct_pred, tf.float32), name='accuracy')
 
   def _summary(self):
