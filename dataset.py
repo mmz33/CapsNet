@@ -16,7 +16,7 @@ def load_mnist(is_training=True):
   :return: Returns:
     - train data, train labels, number of train batches, val data,   if is_training
       val labels, number of val batches
-    - test data, test_labels, number of test batches                 otherwise
+    - test data, number of test batches                              otherwise
   """
   if is_training:
     train_data_path = get_from_config('train_data_path')
@@ -46,14 +46,13 @@ def load_mnist(is_training=True):
     val_X = val_X.reshape(val_X.shape[0], 28, 28, 1)
 
     # convert labels to one hot encoded vectors
-    train_Y = tf.one_hot(train_Y, depth=NUM_OF_CLASSES)
-    val_Y = tf.one_hot(val_Y, depth=NUM_OF_CLASSES)
+    train_Y = tf.one_hot(train_Y, depth=NUM_OF_CLASSES, axis=1)
+    val_Y = tf.one_hot(val_Y, depth=NUM_OF_CLASSES, axis=1)
 
     train_batch_num = (num_of_data-val_sz) // batch_size
     val_batch_num = (val_sz) // batch_size
 
     return train_X, train_Y, train_batch_num, val_X, val_Y, val_batch_num
-
   else:
     test_data_path = get_from_config('test_data_path')
     assert test_data_path is not None
@@ -70,19 +69,3 @@ def load_mnist(is_training=True):
     test_batch_num = test_data.shape[0] // batch_size
 
     return test_X, test_batch_num
-
-def get_batch_data():
-  """Returns one batch of data"""
-
-  train_X, train_Y, train_batch_num, val_X, val_Y, val_batch_num = load_mnist()
-
-  data_queues = tf.train.slice_input_producer([train_X, train_Y],
-                                              name='slice_train_data')
-  # create batches
-  X, Y = tf.train.shuffle_batch(data_queues,
-                                batch_size=batch_size,
-                                capacity=batch_size * 64,
-                                min_after_dequeue=batch_size * 32,
-                                num_threads=num_of_threads,
-                                name='shuffle_batch')
-  return X, Y
