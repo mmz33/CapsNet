@@ -1,6 +1,6 @@
 import tensorflow as tf
 from capsule_layer import CapsuleLayer
-from engine import get_from_config
+from config import get_from_config
 
 class CapsNet:
   """Represents CapsNet Architecture
@@ -30,40 +30,47 @@ class CapsNet:
                width=28,
                channels=1,
                num_of_labels=10,
-               mask_with_labels=False):
+               is_label_mask=False):
 
-    self.is_training = self.is_training
+    self.is_training = is_training
     self.height = height
     self.width = width
     self.channels = channels
     self.num_of_labels = num_of_labels
-    self.mask_with_labels = mask_with_labels
 
     self.batch_size = get_from_config('batch_size')
     assert self.batch_size is not None
 
-    self.graph = tf.Graph()
+    # self.graph = tf.Graph()
+    #
+    # with self.graph.as_default():
+    self.mask_with_labels = tf.placeholder_with_default(is_label_mask,
+                                                        shape=(),
+                                                        name="mask_with_labels")
 
-    with self.graph.as_default():
-      if is_training:
-        self.X = tf.placeholder(dtype=tf.float32,
-                                shape=(self.batch_size, height, width, channels),
-                                name='train_X')
+    if is_training:
+      self.X = tf.placeholder(dtype=tf.float32,
+                              shape=(self.batch_size, height, width, channels),
+                              name='X')
 
-        self.Y = tf.placeholder(dtype=tf.int32,
-                                shape=(self.batch_size,),
-                                name='train_Y')
-        self.loss()
-        self._summary()
-        self.global_step = tf.Variable(0, trainable=False, name='global_step')
-        self.optimizer = tf.train.AdamOptimizer()
-        self.train_op = self.optimizer.minimize(self.total_loss,
-                                                global_step=self.global_step,
-                                                name='train_op')
-      else:
-        self.X = tf.placeholder(dtype=tf.float32,
-                                shape=(self.batch_size, height, width, channels),
-                                name='test_X')
+      self.Y = tf.placeholder(dtype=tf.int64, shape=(self.batch_size,), name='Y')
+      self.Y_enc = tf.one_hot(self.Y, depth=num_of_labels, axis=1, dtype=tf.int64, name='Y_enc')
+
+      self.build_capsnet()
+      self.loss()
+      self._summary()
+      self.global_step = tf.Variable(0, trainable=False, name='global_step')
+      self.optimizer = tf.train.AdamOptimizer()
+      self.train_op = self.optimizer.minimize(self.total_loss,
+                                              global_step=self.global_step,
+                                              name='train_op')
+    else:
+      assert is_label_mask == False, \
+        'During testing, prediction should be used for masking and not the labels.'
+
+      self.X = tf.placeholder(dtype=tf.float32,
+                              shape=(self.batch_size, height, width, channels),
+                              name='test_X')
       self.build_capsnet()
 
   @staticmethod
@@ -111,31 +118,36 @@ class CapsNet:
     # Return tensor with shape [batch_size, 1, 10, 16, 1]
     with tf.variable_scope('DigitCaps_layer'):
       digit_caps_layer = CapsuleLayer(capsules_num=self.num_of_labels,
-                                      act_vec_len=16)
+                                      act_vec_len=8)
       digit_capsules = digit_caps_layer(primary_capsules)
 
       assert digit_capsules.get_shape().as_list() == \
-             [self.batch_size, self.num_of_labels, 16, 1]
+             [self.batch_size, 1, self.num_of_labels, 16, 1]
+
+      digit_capsules = tf.reshape(digit_capsules, shape=[self.batch_size, -1, 16, 1])
+
+      assert digit_capsules.get_shape().as_list() == \
+             [self.batch_size, 10, 16, 1]
 
     # 2.Decoder
 
     # Compute the output probabilities for each class
-    # From [batch_size, 10, 16, 1] to [batch_size, 10, 1, 1]
-    self.y_probs = self.safe_norm(digit_caps_layer, axis=-2, name='y_probs')
+    # From [batch_size, 10, 16, 1] to [batch_size, 10, 1]
+    self.y_probs = self.safe_norm(digit_capsules, axis=-2, name='y_probs')
 
-    assert self.y_probs.get_shape().as_list() == [self.batch_size, 10, 1, 1]
+    assert self.y_probs.get_shape().as_list() == [self.batch_size, 10, 1]
 
     # This is the index of the vector (class) having the largest length
     # Output shape: [batch_size, 1, 1]
-    y_probs_argmax = tf.argmax(self.y_probs, axis=2, name="y_probs_argmax")
+    y_probs_argmax = tf.argmax(self.y_probs, axis=1, name="y_probs_argmax")
 
-    assert y_probs_argmax.get_shape().as_list() == [self.batch_size, 1, 1]
+    assert y_probs_argmax.get_shape().as_list() == [self.batch_size, 1]
 
     # (batch_size,)
     # or reshape with shape=(batch_size,)
-    self.y_pred = tf.squeeze(y_probs_argmax, axis=[1, 2], name="y_pred")
+    self.y_pred = tf.squeeze(y_probs_argmax, axis=[1], name="y_pred")
 
-    assert self.y_pred.get_shape().as_list() == (self.batch_size,)
+    assert self.y_pred.shape == (self.batch_size,)
 
     # For the reconstruction, we need to mask out all the output
     # activity vectors except the longest one. For that, we need
@@ -156,25 +168,25 @@ class CapsNet:
                                 depth=self.num_of_labels,
                                 name='reconst_mask')
 
-      assert reconst_mask.get_shape().as_list() == [self.batch_size, 10]
-
-      # The shape of digit_capsules is [batch_size, 1, 10, 16, 1]
+      # The shape of digit_capsules is [batch_size, 10, 16, 1]
       # Then, we need to reshape the reconstruction mask to apply it
       reconst_mask_reshaped = tf.reshape(reconst_mask,
-                                         shape=[-1, 1, self.num_of_labels, 1, 1],
+                                         shape=[self.batch_size, self.num_of_labels, 1, 1],
                                          name='reconst_mask_reshaped')
 
       # Apply mask
-      # Output shape: [batch_size, 1, 16, 1]
+      # Output shape: [batch_size, 10, 16, 1]
       masked_output = tf.multiply(digit_capsules,
                                   reconst_mask_reshaped,
                                   name='masked_output')
 
-      assert masked_output.get_shape().as_list() == [self.batch_size, 1, 16, 1]
+      assert masked_output.get_shape().as_list() == [self.batch_size, 10, 16, 1]
 
       # Flatten the masked output vector to be used in the fully connected layers
       masked_output_flattened = tf.reshape(masked_output,
                                            shape=[self.batch_size, -1])
+
+      assert masked_output_flattened.get_shape().as_list() == [self.batch_size, 160]
 
       with tf.variable_scope('FC_layer'):
         fc_layer1_out = tf.layers.dense(masked_output_flattened,
@@ -205,7 +217,7 @@ class CapsNet:
     m_minus = get_from_config('m_minus')
     lambda_ = get_from_config('lambda')
 
-    T_k = tf.one_hot(self.Y, depth=self.num_of_labels, name='T_k')
+    T_k = tf.to_float(self.Y_enc)
 
     max_l = tf.square(tf.maximum(0., m_plus - self.y_probs),
                       name='max_l')
@@ -226,7 +238,7 @@ class CapsNet:
                                       name='incorrect_label_loss')
 
     self.margin_loss = tf.add(T_k * correct_label_loss, (1 - T_k) * incorrect_label_loss,
-                         name='margin_loss')
+                              name='margin_loss')
 
     # 2. reconstruction loss
 
@@ -244,7 +256,6 @@ class CapsNet:
 
   def compute_accuracy(self):
     """Compute the prediction accuracy"""
-
     correct_pred = tf.equal(self.Y, self.y_pred, name='correct_pred')
     self.accuracy = tf.reduce_sum(tf.cast(correct_pred, tf.float32), name='accuracy')
 
