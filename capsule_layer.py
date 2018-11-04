@@ -1,5 +1,5 @@
 import tensorflow as tf
-from engine import get_from_config
+from config import get_from_config
 
 class CapsuleLayer:
   """Represents a Capsule Layer
@@ -69,9 +69,9 @@ class CapsuleLayer:
       # Reshape capsules into one column vector to be fully connected with the next layer
       # New shape: [batch_size, capsules, vector_length]
       # Output shape: [batch_size, 1152, 8]
-      capsules = tf.reshape(conv_out, shape=[inputs[0], -1, self.act_vec_len])
+      capsules = tf.reshape(conv_out, shape=[inputs.shape[0], -1, self.act_vec_len])
 
-      assert capsules.get_shape() == [inputs[0], 1152, 8]
+      assert capsules.get_shape() == [inputs.shape[0], 1152, 8]
 
       # Apply squashing non-linearity function
       # Squash on the capsules vectors axis
@@ -101,8 +101,8 @@ class CapsuleLayer:
       The activity vectors of the high-level capsules in layer l+1
     """
 
-    batch_size = inputs.shape()[0]
-    num_caps_l = inputs.shape()[1]
+    batch_size = inputs.shape[0]
+    num_caps_l = inputs.shape[1]
 
     # Create transformation weight matrix variable
     W_ij = tf.get_variable(name='Weight',
@@ -185,8 +185,9 @@ class CapsuleLayer:
 
       # Line 7: update the b_ij variables to be used to update the c_ij variables
 
+      # TODO: 1152 should not be hard coded
       # Output shape: [batch_size, 1152, 10, 16, 1]
-      v_j_tiled = tf.tile(v_j, [1, num_out_caps, 1, 1, 1], name='v_j_tiled')
+      v_j_tiled = tf.tile(v_j, [1, 1152, 1, 1, 1], name='v_j_tiled')
 
       assert v_j_tiled.get_shape().as_list() == [batch_size, 1152, 10, 16, 1]
 
@@ -194,7 +195,7 @@ class CapsuleLayer:
       # Output shape: [batch_size, 1152, 10, 16, 1]
       agreement = tf.matmul(u_hat_vectors, v_j_tiled, transpose_a=True, name='agreement')
 
-      assert agreement.get_shape().as_list() == [batch_size, 1152, 10, 16, 1]
+      assert agreement.get_shape().as_list() == [batch_size, 1152, 10, 1, 1]
 
       b_ij = tf.add(b_ij, agreement, name='temp_weighting_coeff_update')
 
