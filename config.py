@@ -19,7 +19,8 @@ config = {
   # For margin loss
   'm_plus': 0.9,
   'm_minus': 0.1,
-  'lambda': 0.5
+  'lambda': 0.5,
+  'alpha': 0.0005
 }
 
 def get_from_config(key):

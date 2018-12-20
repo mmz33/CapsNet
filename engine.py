@@ -36,8 +36,6 @@ def train(model, restore_checkpoint=True):
         start = train_iter * batch_size
         end = start + batch_size
 
-        logging.info('start: %d, end: %d' % (start, end))
-
         # Run the training operation and measure the loss
         _, global_step, train_loss, train_acc, _summary = \
           sess.run([model.train_op, model.global_step, model.total_loss,

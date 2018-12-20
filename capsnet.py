@@ -216,6 +216,7 @@ class CapsNet:
     m_plus = get_from_config('m_plus')
     m_minus = get_from_config('m_minus')
     lambda_ = get_from_config('lambda')
+    alpha = get_from_config('alpha')
 
     T_k = tf.to_float(self.Y_enc)
 
@@ -237,8 +238,11 @@ class CapsNet:
                                       shape=[-1, self.num_of_labels],
                                       name='incorrect_label_loss')
 
-    self.margin_loss = tf.add(T_k * correct_label_loss, (1 - T_k) * incorrect_label_loss,
-                              name='margin_loss')
+    L = tf.add(T_k * correct_label_loss,
+               lambda_ * (1 - T_k) * incorrect_label_loss,
+               name='L')
+
+    self.margin_loss = tf.reduce_mean(tf.reduce_sum(L, axis=-1), name='margin_loss')
 
     # 2. reconstruction loss
 
@@ -252,7 +256,7 @@ class CapsNet:
 
     self.reconst_loss = tf.reduce_mean(squared_diff, name='reconst_loss')
 
-    self.total_loss = tf.add(self.margin_loss, lambda_ * self.reconst_loss, name='total_loss')
+    self.total_loss = tf.add(self.margin_loss, alpha * self.reconst_loss, name='total_loss')
 
   def compute_accuracy(self):
     """Compute the prediction accuracy"""
