@@ -1,3 +1,4 @@
+# TODO: validate values types
 # Contains a set of param
 config = {
   # For training
@@ -12,6 +13,7 @@ config = {
   # For dataset
   'train_data_path': 'data/train.csv',
   'test_data_path' : 'data/test.csv',
+  'dev_size': 0.1,
   'num_of_threads': 4,
 
   # For margin loss
@@ -28,5 +30,5 @@ def get_from_config(key):
   """
 
   assert isinstance(key, str), str(key) + ' must be of type str.'
-  assert key in config, str(key) + ' is not found in config.'
+  assert key in config, str(key) + ' is not found in config. It must be one for these'
   return config[key]

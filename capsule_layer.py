@@ -116,8 +116,8 @@ class CapsuleLayer:
     assert W_tiled.get_shape().as_list() == [batch_size, 1152, 10, 16, 8]
 
     # Each previous layer output capsule is `act_vec_len` dimension
-    # So, we need to expand the dimension by adding 1 at the end so that we
-    # We can apply the matrix multiplication later with W_tiled later
+    # so, we need to expand the dimension by adding 1 at the end so that we
+    # can apply the matrix multiplication with W_tiled later
     # Output shape: [batch_size, 1152, 8, 1]
     caps1_out_expand1 = tf.expand_dims(inputs, -1, name='caps1_out_expand1')
 

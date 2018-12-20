@@ -1,4 +1,3 @@
-import tensorflow as tf
 import pandas as pd
 import numpy as np
 from config import get_from_config
@@ -14,8 +13,9 @@ def load_mnist(is_training=True):
   :return: Returns:
     - train data, train labels, number of train batches, val data,   if is_training
       val labels, number of val batches
-    - test data, number of test batches                              otherwise
+    - test data                                                      otherwise
   """
+
   if is_training:
     train_data_path = get_from_config('train_data_path')
     assert train_data_path is not None
@@ -26,7 +26,7 @@ def load_mnist(is_training=True):
     num_of_data = train_data.shape[0]
 
     # validation dataset size
-    val_sz = int(num_of_data * 0.2)
+    val_sz = int(num_of_data * get_from_config('dev_size'))
 
     train_X = train_data.iloc[val_sz:, 1:].values.astype('float32')
     train_Y = train_data.iloc[val_sz:, 0].values.astype('int32')

@@ -21,7 +21,7 @@ class CapsNet:
     channels: An integer, the number of the input image channels
     num_of_labels: An integer, the number of output labels
     mask_with_labels: A boolean, if True then the true labels are used
-    for masking otherwise the predicted labels are used
+    for reconstruction otherwise the predicted labels are used
   """
 
   def __init__(self,
@@ -66,7 +66,7 @@ class CapsNet:
                                               name='train_op')
     else:
       assert is_label_mask == False, \
-        'During testing, prediction should be used for masking and not the labels.'
+        'During testing, predicted labels should be used for reconstruction and not the true labels.'
 
       self.X = tf.placeholder(dtype=tf.float32,
                               shape=(self.batch_size, height, width, channels),

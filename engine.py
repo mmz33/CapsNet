@@ -30,7 +30,7 @@ def train(model, restore_checkpoint=True):
       sess.run(tf.global_variables_initializer())
 
     for epoch in range(num_of_epochs):
-      logging.info('Start epoch %d' % epoch)
+      logging.info('Start epoch %d' % (epoch+1))
       for train_iter in range(train_batch_num):
 
         start = train_iter * batch_size
