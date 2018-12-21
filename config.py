@@ -7,7 +7,7 @@ config = {
   'epoch': 50,
   'routing_iterations': 3,
   'stddev': 0.01,
-  'checkpoint_path': './models',
+  'checkpoint_path': './net-models',
   'train_log_dir': './train_logs',
 
   # For dataset
