@@ -261,7 +261,7 @@ class CapsNet:
   def compute_accuracy(self):
     """Compute the prediction accuracy"""
     correct_pred = tf.equal(self.Y, self.y_pred, name='correct_pred')
-    self.accuracy = tf.reduce_sum(tf.cast(correct_pred, tf.float32), name='accuracy')
+    self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='accuracy') * 100
 
   def _summary(self):
     """Merges training summaries"""
