@@ -43,7 +43,7 @@ def train(model, restore_checkpoint=True):
                     feed_dict={model.X: train_X[start:end],
                                model.Y: train_Y[start:end]})
 
-        logging.info('global_step: {}'.format(global_step))
+        #logging.info('global_step: {}'.format(global_step))
         logging.info('Epoch {}, Iteration {}/{}, loss: {}, accuracy: {}'
           .format(epoch+1, train_iter+1, train_batch_num, train_loss, train_acc))
 
@@ -53,8 +53,6 @@ def train(model, restore_checkpoint=True):
       val_acc = []
       val_loss = []
       for val_iter in range(val_batch_num):
-        logging.info('Validating...')
-
         start = val_iter * batch_size
         end = start + batch_size
 
@@ -64,18 +62,20 @@ def train(model, restore_checkpoint=True):
                     feed_dict={model.X: val_X[start:end],
                                model.Y: val_Y[start:end]})
 
-        logging.info('Validation: {}/{}'.format(val_iter, val_batch_num))
+        logging.info('Validation: {}/{}, loss: {}, accuracy: {}'
+                     .format(val_iter+1, val_batch_num, train_loss, train_acc))
 
-        # train_writer.add_summary(_summary, global_step)
-        # train_writer.flush()
+        train_writer.add_summary(_summary, global_step)
 
         val_acc.append(train_acc)
         val_loss.append(train_loss)
 
+      train_writer.flush()
+
       total_acc = np.mean(val_acc)
       total_loss = np.mean(val_loss)
 
-      logging.info('Validation Epoch {}, Val accuracy: {}, Loss: {}'
+      logging.info('Validation Epoch {}, Loss: {},  Val accuracy: {}'
         .format(epoch+1, total_acc, total_loss))
 
       if best_loss_val > total_loss:
@@ -86,6 +86,7 @@ def train(model, restore_checkpoint=True):
         return
 
 def predict(model):
+  # TODO: restore model first and then predict
   test_X = load_mnist(is_training=False)
   with tf.Session() as sess:
     test_loss = sess.run([model.total_loss], feed_dict={model.X: test_X})
@@ -98,13 +99,13 @@ def predict(model):
 if __name__ == '__main__':
   logging.basicConfig(level=logging.INFO)
   parser = argparse.ArgumentParser()
-  parser.add_argument('--run_train', type=bool, default=True,  help='Start training')
+  parser.add_argument('--run_train', type=bool, default=False, help='Start training')
   parser.add_argument('--run_test',  type=bool, default=False, help='Start testing')
   FLAGS, unparsed = parser.parse_known_args()
   if FLAGS.run_train:
     logging.info('Start training...')
     model = CapsNet()
-    train(model, restore_checkpoint=False)
+    train(model, restore_checkpoint=True)
     logging.info('End training...')
   elif FLAGS.run_test:
     logging.info('Start testing.')
