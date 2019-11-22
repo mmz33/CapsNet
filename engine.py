@@ -1,69 +1,66 @@
-import tensorflow as tf
-from dataset import load_mnist
+import tensorflow.compat.v1 as tf
 import logging
 import numpy as np
 from capsnet import CapsNet
 import argparse
 from config import get_from_config
+from dataset import load_mnist
 
 train_log_dir = get_from_config('train_log_dir')
 checkpoint_path = get_from_config('checkpoint_path')
 batch_size = get_from_config('batch_size')
 
-def train(model, restore_checkpoint=True):
-  # loads the data
-  train_X, train_Y, train_batch_num, val_X, val_Y, val_batch_num = load_mnist()
-
+def train(restore_checkpoint=True):
   num_of_epochs = get_from_config('epochs')
 
   # store the best loss so far which can be used in validation
   best_loss_val = np.inf
   with tf.Session() as sess:
-
     saver = tf.train.Saver()
     train_writer = tf.summary.FileWriter(train_log_dir, sess.graph)
-
     if restore_checkpoint and tf.train.checkpoint_exists(checkpoint_path):
       saver.restore(sess, checkpoint_path)
     else:
       logging.info('Initializing variables...')
       sess.run(tf.global_variables_initializer())
 
+    num_train_samples = train_X.shape[0]
+    num_train_batches = num_train_samples // batch_size
+
+    num_val_samples = val_X.shape[0]
+    num_val_batches = num_val_samples // batch_size
+
     for epoch in range(num_of_epochs):
       logging.info('Start epoch %d' % (epoch+1))
-      for train_iter in range(train_batch_num):
+
+      for train_iter in range(num_train_batches):
 
         start = train_iter * batch_size
-        end = start + batch_size
+        end = min(num_train_samples, start + batch_size)
 
         # Run the training operation and measure the loss
-        _, global_step, train_loss, train_acc, _summary = \
-          sess.run([model.train_op, model.global_step, model.total_loss,
-                    model.accuracy, model.train_summary],
-                    feed_dict={model.X: train_X[start:end],
-                               model.Y: train_Y[start:end]})
+        _, global_step, train_loss, train_acc, _summary = sess.run(
+          [model.train_op, model.global_step, model.total_loss, model.accuracy, model.train_summary],
+          feed_dict={model.X: train_X[start:end], model.Y: train_Y[start:end]})
 
-        #logging.info('global_step: {}'.format(global_step))
         logging.info('Epoch {}, Iteration {}/{}, loss: {}, accuracy: {}'
-          .format(epoch+1, train_iter+1, train_batch_num, train_loss, train_acc))
+          .format(epoch+1, train_iter+1, num_train_batches, train_loss, train_acc))
 
         train_writer.add_summary(_summary, global_step)
 
       # Do validation at the end of each epoch
       val_acc = []
       val_loss = []
-      for val_iter in range(val_batch_num):
+      for val_iter in range(num_val_batches):
         start = val_iter * batch_size
         end = start + batch_size
 
-        _, global_step, train_loss, train_acc, _summary = \
-          sess.run([model.train_op, model.global_step, model.total_loss,
-                    model.accuracy, model.train_summary],
-                    feed_dict={model.X: val_X[start:end],
-                               model.Y: val_Y[start:end]})
+        _, global_step, train_loss, train_acc, _summary = sess.run(
+          [model.train_op, model.global_step, model.total_loss, model.accuracy, model.train_summary],
+          feed_dict={model.X: val_X[start:end], model.Y: val_Y[start:end]})
 
         logging.info('Validation: {}/{}, loss: {}, accuracy: {}'
-                     .format(val_iter+1, val_batch_num, train_loss, train_acc))
+                     .format(val_iter+1, num_val_batches, train_loss, train_acc))
 
         train_writer.add_summary(_summary, global_step)
 
@@ -75,7 +72,7 @@ def train(model, restore_checkpoint=True):
       total_acc = np.mean(val_acc)
       total_loss = np.mean(val_loss)
 
-      logging.info('Validation Epoch {}, Loss: {},  Val accuracy: {}'
+      logging.info('Validation Epoch {}, Loss: {}, Val accuracy: {}'
         .format(epoch+1, total_acc, total_loss))
 
       if best_loss_val > total_loss:
@@ -85,11 +82,10 @@ def train(model, restore_checkpoint=True):
         logging.info('Error not improving. Stop training.')
         return
 
-def predict(model):
+def predict():
   # TODO: restore model first and then predict
-  test_X = load_mnist(is_training=False)
   with tf.Session() as sess:
-    test_loss = sess.run([model.total_loss], feed_dict={model.X: test_X})
+    test_loss = sess.run(model.total_loss, feed_dict={model.X: test_X})
     logging.info('test_loss: {}'.format(test_loss))
     with open('submission.csv', 'w') as out_file:
       out_file.write('ImageId,Label\n')
@@ -99,16 +95,21 @@ def predict(model):
 if __name__ == '__main__':
   logging.basicConfig(level=logging.INFO)
   parser = argparse.ArgumentParser()
-  parser.add_argument('--run_train', type=bool, default=False, help='Start training')
-  parser.add_argument('--run_test',  type=bool, default=False, help='Start testing')
-  FLAGS, unparsed = parser.parse_known_args()
-  if FLAGS.run_train:
+  parser.add_argument('--train', action="store_true", help='Start training')
+  parser.add_argument('--test',  action="store_true", help='Start testing')
+  FLAGS = parser.parse_args()
+
+  train_X, train_Y, val_X, val_Y, test_X, test_Y = load_mnist()
+
+  print(train_X.shape)
+
+  if FLAGS.train:
     logging.info('Start training...')
     model = CapsNet()
-    train(model, restore_checkpoint=True)
+    train(restore_checkpoint=True)
     logging.info('End training...')
-  elif FLAGS.run_test:
+  elif FLAGS.test:
     logging.info('Start testing.')
     model = CapsNet(is_training=False)
-    predict(model)
+    predict()
     logging.info('End testing.')
