@@ -1,5 +1,5 @@
-# TODO: validate values types
-# Contains a set of param
+"""Set params here"""
+
 config = {
   # For training
   'epochs': 10,
@@ -7,12 +7,10 @@ config = {
   'epoch': 50,
   'routing_iterations': 3,
   'stddev': 0.01,
-  'checkpoint_path': './net-models',
+  'checkpoint_path': './net-model',
   'train_log_dir': './train_logs',
 
   # For dataset
-  'train_data_path': 'data/train.csv',
-  'test_data_path' : 'data/test.csv',
   'dev_size': 0.1,
   'num_of_threads': 4,
 
