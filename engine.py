@@ -1,5 +1,4 @@
 import tensorflow.compat.v1 as tf
-import logging
 import numpy as np
 from capsnet import CapsNet
 import argparse
@@ -21,7 +20,7 @@ def train(restore_checkpoint=True):
     if restore_checkpoint and tf.train.checkpoint_exists(checkpoint_path):
       saver.restore(sess, checkpoint_path)
     else:
-      logging.info('Initializing variables...')
+      print('Initializing variables...')
       sess.run(tf.global_variables_initializer())
 
     num_train_samples = train_X.shape[0]
@@ -31,7 +30,7 @@ def train(restore_checkpoint=True):
     num_val_batches = num_val_samples // batch_size
 
     for epoch in range(num_of_epochs):
-      logging.info('Start epoch %d' % (epoch+1))
+      print('start epoch %d' % (epoch+1))
 
       for train_iter in range(num_train_batches):
 
@@ -43,12 +42,13 @@ def train(restore_checkpoint=True):
           [model.train_op, model.global_step, model.total_loss, model.accuracy, model.train_summary],
           feed_dict={model.X: train_X[start:end], model.Y: train_Y[start:end]})
 
-        logging.info('Epoch {}, Iteration {}/{}, loss: {}, accuracy: {}'
-          .format(epoch+1, train_iter+1, num_train_batches, train_loss, train_acc))
+        print('batch {}/{}, loss: {}, accuracy: {:.2f}%'
+              .format(train_iter+1, num_train_batches, train_loss, train_acc))
 
         train_writer.add_summary(_summary, global_step)
 
       # Do validation at the end of each epoch
+      print('start validation for epoch {}'.format(epoch))
       val_acc = []
       val_loss = []
       for val_iter in range(num_val_batches):
@@ -59,8 +59,7 @@ def train(restore_checkpoint=True):
           [model.train_op, model.global_step, model.total_loss, model.accuracy, model.train_summary],
           feed_dict={model.X: val_X[start:end], model.Y: val_Y[start:end]})
 
-        logging.info('Validation: {}/{}, loss: {}, accuracy: {}'
-                     .format(val_iter+1, num_val_batches, train_loss, train_acc))
+        print('batch {}/{}, loss: {}, accuracy: {:.2f}%'.format(val_iter+1, num_val_batches, train_loss, train_acc))
 
         train_writer.add_summary(_summary, global_step)
 
@@ -72,28 +71,26 @@ def train(restore_checkpoint=True):
       total_acc = np.mean(val_acc)
       total_loss = np.mean(val_loss)
 
-      logging.info('Validation Epoch {}, Loss: {}, Val accuracy: {}'
-        .format(epoch+1, total_acc, total_loss))
+      print('total val loss: {}, total val accuracy: {:.2f}%'.format(total_acc, total_loss))
 
       if best_loss_val > total_loss:
         saver.save(sess, checkpoint_path, global_step=global_step)
         best_loss_val = total_loss
       else:
-        logging.info('Error not improving. Stop training.')
+        print('Error not improving. Stop training.')
         return
 
-def predict():
+def predict(ckpt_num):
   # TODO: restore model first and then predict
   with tf.Session() as sess:
     test_loss = sess.run(model.total_loss, feed_dict={model.X: test_X})
-    logging.info('test_loss: {}'.format(test_loss))
+    print('test_loss: {}'.format(test_loss))
     with open('submission.csv', 'w') as out_file:
       out_file.write('ImageId,Label\n')
       for img_id, pred_out in enumerate(model.y_pred):
         out_file.write('%d,%d\n' % (img_id, pred_out))
 
 if __name__ == '__main__':
-  logging.basicConfig(level=logging.INFO)
   parser = argparse.ArgumentParser()
   parser.add_argument('--train', action="store_true", help='Start training')
   parser.add_argument('--test',  action="store_true", help='Start testing')
@@ -101,15 +98,13 @@ if __name__ == '__main__':
 
   train_X, train_Y, val_X, val_Y, test_X, test_Y = load_mnist()
 
-  print(train_X.shape)
-
   if FLAGS.train:
-    logging.info('Start training...')
+    print('Start training...')
     model = CapsNet()
     train(restore_checkpoint=True)
-    logging.info('End training...')
+    print('End training...')
   elif FLAGS.test:
-    logging.info('Start testing.')
+    print('Start testing.')
     model = CapsNet(is_training=False)
-    predict()
-    logging.info('End testing.')
+    predict(1)
+    print('End testing.')

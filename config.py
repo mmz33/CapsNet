@@ -5,6 +5,7 @@ config = {
   'epochs': 10,
   'batch_size': 128,
   'epoch': 50,
+  'lr': 0.1,
   'routing_iterations': 3,
   'stddev': 0.01,
   'checkpoint_path': './net-model',

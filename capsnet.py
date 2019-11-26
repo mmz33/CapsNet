@@ -47,8 +47,8 @@ class CapsNet:
     self.batch_size = get_from_config('batch_size')
 
     self.X = tf.placeholder(dtype=tf.float32, shape=[self.batch_size, height, width, channels], name='X')
-    self.Y = tf.placeholder(dtype=tf.int64, shape=[self.batch_size], name='Y')
-    self.Y_enc = tf.one_hot(self.Y, depth=num_of_labels, axis=1, dtype=tf.int64, name='Y_enc')
+    self.Y = tf.placeholder(dtype=tf.int32, shape=[self.batch_size], name='Y')
+    self.Y_enc = tf.one_hot(self.Y, depth=num_of_labels, axis=1, dtype=tf.int32, name='Y_enc')
 
     if is_training:
       self.build_capsnet()
@@ -83,15 +83,16 @@ class CapsNet:
     """Builds the CapsNet Architecture"""
 
     # first convolutional layer
-    conv1_kernel = tf.get_variable("conv1_kernel", [9, 9, 1, 256], dtype=tf.float32)
+    conv1_kernel = tf.get_variable(
+      "conv1_kernel", [9, 9, 1, 256], dtype=tf.float32, initializer=tf.random_normal_initializer(get_from_config('stddev')))
     conv1 = tf.nn.conv2d(input=self.X, filter=conv1_kernel, padding='VALID') # (B,20,20,256)
     conv1 = tf.nn.relu(conv1)
 
     # PrimaryCaps layer
     with tf.variable_scope("primarycaps_layer"):
       primary_caps_layer = CapsuleLayer(num_capsules=self.primary_capsules, activity_vector_len=self.activity_vector_len)
-      primary_caps_kernel = tf.get_variable(
-        "primary_caps_kernel", [9, 9, 256, self.activity_vector_len * self.primary_capsules], dtype=tf.float32)
+      primary_caps_kernel = tf.get_variable("primary_caps_kernel", [9, 9, 256, self.activity_vector_len * self.primary_capsules],
+        dtype=tf.float32, initializer=tf.random_normal_initializer(get_from_config('stddev')))
       primary_capsules = primary_caps_layer(conv1, kernel=primary_caps_kernel, strides=2) # (B,1152,8)
 
     # DigitCaps layer
@@ -101,7 +102,7 @@ class CapsNet:
       digit_capsules = tf.squeeze(digit_capsules) # (B,10,16)
 
     self.y_probs = self.safe_norm(digit_capsules, axis=-1, name='y_probs') # (B,10)
-    self.y_pred = tf.argmax(self.y_probs, axis=-1, name="y_pred") # (B,)
+    self.y_pred = tf.argmax(self.y_probs, axis=-1, name="y_pred", output_type=tf.int32) # (B,)
 
     # For the reconstruction, we need to mask out all the output activity vectors except the longest one.
     # For that, we need to apply masking.
@@ -117,11 +118,13 @@ class CapsNet:
       masked_output_flattened = tf.reshape(masked_output, shape=[self.batch_size, -1])
 
     with tf.variable_scope('fc_layers'):
-      # TODO: tf.layers.dense is deprecated
-      fc_layer1_out = tf.layers.dense(masked_output_flattened, units=512, activation=tf.nn.relu, name='fc_layer1_out')
-      fc_layer2_out = tf.layers.dense(fc_layer1_out, units=1024, activation=tf.nn.relu, name='fc_layer2_out')
-      self.decoder_output = tf.layers.dense(
-        fc_layer2_out, units=self.height * self.width * self.channels, activation=tf.nn.sigmoid, name='fc_layer3_out')
+      fc1 = tf.keras.layers.Dense(units=512, activation=tf.nn.relu, name='fc_layer1_out')
+      fc1_out = fc1(masked_output_flattened)
+      fc2 = tf.keras.layers.Dense(units=1024, activation=tf.nn.relu, name='fc_layer2_out')
+      fc2_out = fc2(fc1_out)
+      out = tf.keras.layers.Dense(
+        units=self.height * self.width * self.channels, activation=tf.nn.sigmoid, name='fc_layer3_out')
+      self.decoder_output = out(fc2_out)
 
   def loss(self):
     """Computes the total loss of the network
@@ -138,7 +141,7 @@ class CapsNet:
 
     # margin_loss
 
-    T_k = tf.to_float(self.Y_enc)
+    T_k = tf.cast(self.Y_enc, dtype=tf.float32)
     max_l = tf.square(tf.maximum(0., m_plus - self.y_probs), name='max_l') # (B,10)
     max_r = tf.square(tf.maximum(0., self.y_probs - m_minus), name='max_r') # (B,10)
     L = tf.add(T_k * max_l, lambda_ * (1 - T_k) * max_r, name='L') # (B,10)
