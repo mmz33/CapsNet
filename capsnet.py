@@ -60,10 +60,11 @@ class CapsNet:
             self.optimizer = tf.train.AdamOptimizer()
             self.train_op = self.optimizer.minimize(self.total_loss, global_step=self.global_step, name='train_op')
         else:
-            assert is_label_mask == False, \
+            assert is_label_mask is False, \
                 'During testing, predicted labels should be used for reconstruction and not the true labels.'
 
             self.build_capsnet()
+            self.compute_accuracy()
 
     @staticmethod
     def safe_norm(s, axis=-1, epsilon=1e-7, keepdims=False, name=None):
