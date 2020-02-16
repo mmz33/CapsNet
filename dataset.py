@@ -1,6 +1,9 @@
 import tensorflow.compat.v1 as tf
 import matplotlib.pyplot as plt
 import numpy as np
+from collections import namedtuple
+
+Datasets = namedtuple('Datasets', ['train', 'val', 'test'])
 
 
 def load_mnist(val_prc=0.1):
@@ -22,7 +25,7 @@ def load_mnist(val_prc=0.1):
     x_train = x_train[val_size:]
     y_train = y_train[val_size:]
 
-    return x_train, y_train, x_val, y_val, x_test, y_test
+    return Datasets(train=(x_train, y_train), val=(x_val, y_val), test=(x_test, y_test))
 
 
 def plot_img(img, label=None):
