@@ -1,2 +1,6 @@
+# Ignore everything
+*
+
+# exclude these
 !*.py
 !/report
