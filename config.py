@@ -1,21 +1,12 @@
 """Set params here"""
 
 config = {
-    # For training
     'epochs': 10,
     'batch_size': 128,
-    'epoch': 50,
-    'lr': 0.1,
     'routing_iterations': 3,
     'stddev': 0.01,
-    'checkpoint_path': 'net-model',
-    'train_log_dir': 'train_logs',
-
-    # For dataset
-    'dev_size': 0.1,
-    'num_of_threads': 4,
-
-    # For margin loss
+    'checkpoint_path': 'net-model/network',
+    'log': 'tf_logs',
     'm_plus': 0.9,
     'm_minus': 0.1,
     'lambda': 0.5,
