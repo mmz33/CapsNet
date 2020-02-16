@@ -1,6 +1,7 @@
 import tensorflow.compat.v1 as tf
 from capsule_layer import CapsuleLayer
 from config import get_from_config
+from utils import safe_norm
 
 
 class CapsNet:
@@ -18,14 +19,14 @@ class CapsNet:
     """
 
     def __init__(self,
-                 is_training=True,
+                 is_training,
                  height=28,
                  width=28,
                  channels=1,
                  primary_capsules=32,
                  activity_vector_len=8,
-                 num_of_labels=10,
-                 is_label_mask=False):
+                 out_activity_vector_len=16,
+                 num_of_labels=10):
 
         """
         :param is_training: A boolean, if True this means we are in the training phase
@@ -43,69 +44,57 @@ class CapsNet:
         self.channels = channels
         self.primary_capsules = primary_capsules
         self.activity_vector_len = activity_vector_len
+        self.out_activity_vector_len = out_activity_vector_len
         self.num_of_labels = num_of_labels
-        self.mask_with_labels = tf.placeholder_with_default(is_label_mask, shape=(), name='mask_with_labels')
-        self.batch_size = get_from_config('batch_size')
+        self.mask_with_labels = tf.placeholder_with_default(False, shape=(), name='mask_with_labels')
 
-        self.X = tf.placeholder(dtype=tf.float32, shape=[self.batch_size, height, width, channels], name='X')
-        self.Y = tf.placeholder(dtype=tf.int32, shape=[self.batch_size], name='Y')
+        self.X = tf.placeholder(dtype=tf.float32, shape=[None, height, width, channels], name='X')
+        self.Y = tf.placeholder(dtype=tf.int32, shape=[None], name='Y')
         self.Y_enc = tf.one_hot(self.Y, depth=num_of_labels, axis=1, dtype=tf.int32, name='Y_enc')
 
+        self.build_capsnet()
+        self.compute_accuracy()
+        self.loss()
         if is_training:
-            self.build_capsnet()
-            self.loss()
-            self.compute_accuracy()
             self._summary()
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
             self.optimizer = tf.train.AdamOptimizer()
             self.train_op = self.optimizer.minimize(self.total_loss, global_step=self.global_step, name='train_op')
-        else:
-            assert is_label_mask is False, \
-                'During testing, predicted labels should be used for reconstruction and not the true labels.'
-
-            self.build_capsnet()
-            self.compute_accuracy()
-
-    @staticmethod
-    def safe_norm(s, axis=-1, epsilon=1e-7, keepdims=False, name=None):
-        """
-        Computes the norm of some input tensor
-
-        :param s: A 4-D tf.Tensor
-        :param axis: An integer, axis on which to apply safe_norm
-        :param epsilon: A float, used to avoid dividing by zero
-        :param keepdims: If true, retains reduced dimensions with length 1.
-        :return: A tensor, the norm of tensor s
-        """
-        with tf.name_scope(name, default_name='safe_norm'):
-            squared_norm = tf.reduce_sum(tf.square(s), axis=axis, keepdims=keepdims)
-            return tf.sqrt(squared_norm + epsilon)
 
     def build_capsnet(self):
         """
         Builds the CapsNet Architecture
         """
+        stddev = get_from_config('stddev')
 
         # first convolutional layer
         conv1_kernel = tf.get_variable(
-            "conv1_kernel", [9, 9, 1, 256], dtype=tf.float32, initializer=tf.random_normal_initializer(get_from_config('stddev')))
+            "conv1_kernel", [9, 9, 1, 256],
+            dtype=tf.float32,
+            initializer=tf.random_normal_initializer(stddev)
+        )
         conv1 = tf.nn.conv2d(input=self.X, filter=conv1_kernel, padding='VALID')  # (B,20,20,256)
         conv1 = tf.nn.relu(conv1)
 
+        capsule_layer = CapsuleLayer(num_primary_caps=self.primary_capsules,
+                                     primary_caps_vec_len=self.activity_vector_len,
+                                     num_out_caps=self.num_of_labels,
+                                     out_caps_vec_len=self.out_activity_vector_len)
         # PrimaryCaps layer
         with tf.variable_scope("primarycaps_layer"):
-            primary_caps_layer = CapsuleLayer(num_capsules=self.primary_capsules, activity_vector_len=self.activity_vector_len)
-            primary_caps_kernel = tf.get_variable("primary_caps_kernel", [9, 9, 256, self.activity_vector_len * self.primary_capsules],
-                                                  dtype=tf.float32, initializer=tf.random_normal_initializer(get_from_config('stddev')))
-            primary_capsules = primary_caps_layer(conv1, kernel=primary_caps_kernel, strides=2)  # (B,1152,8)
+            primary_caps_kernel = tf.get_variable(
+                "primary_caps_kernel",
+                [9, 9, 256, self.activity_vector_len * self.primary_capsules],
+                dtype=tf.float32, initializer=tf.random_normal_initializer(stddev)
+            )
+            primary_caps = capsule_layer(conv1, kernel=primary_caps_kernel, strides=2)  # (B,1152,8)
 
         # DigitCaps layer
         with tf.variable_scope("digitcaps_layer"):
-            digit_caps_layer = CapsuleLayer(num_capsules=self.num_of_labels, activity_vector_len=self.activity_vector_len)
-            digit_capsules = digit_caps_layer(primary_capsules)  # (B,1,10,16,1)
+            digit_capsules = capsule_layer(primary_caps)  # (B,1,10,16,1)
             digit_capsules = tf.squeeze(digit_capsules)  # (B,10,16)
 
-        self.y_probs = self.safe_norm(digit_capsules, axis=-1, name='y_probs')  # (B,10)
+        self.y_probs = safe_norm(digit_capsules, axis=-1, name='y_probs')  # (B,10)
         self.y_pred = tf.argmax(self.y_probs, axis=-1, name="y_pred", output_type=tf.int32)  # (B,)
 
         # For the reconstruction, we need to mask out all the output activity vectors except the longest one.
@@ -113,12 +102,13 @@ class CapsNet:
         with tf.variable_scope('masking'):
             reconstruct_targets = tf.cond(
                 self.mask_with_labels, lambda: self.Y, lambda: self.y_pred, name='reconstruct_targets')  # (B,)
-
-            reconstruct_mask = tf.one_hot(reconstruct_targets, depth=self.num_of_labels, name='reconstruct_mask')  # (B,10)
-            reconstruct_mask_expanded = tf.expand_dims(reconstruct_mask, axis=-1, name='reconstruct_mask_expanded')  # (B,10,1)
+            reconstruct_mask = tf.one_hot(
+                reconstruct_targets, depth=self.num_of_labels, name='reconstruct_mask')  # (B,10)
+            reconstruct_mask_expanded = tf.expand_dims(
+                reconstruct_mask, axis=-1, name='reconstruct_mask_expanded')  # (B,10,1)
             masked_output = tf.multiply(digit_capsules, reconstruct_mask_expanded, name='masked_output')  # (B,10,16)
-
-            masked_output_flattened = tf.reshape(masked_output, shape=[self.batch_size, -1])
+            masked_output_flattened = tf.reshape(
+                masked_output, shape=[-1, self.out_activity_vector_len * self.num_of_labels])  # (B,160)
 
         with tf.variable_scope('fc_layers'):
             fc1 = tf.keras.layers.Dense(units=512, activation=tf.nn.relu, name='fc_layer1_out')
@@ -146,10 +136,10 @@ class CapsNet:
         # margin_loss
 
         T_k = tf.cast(self.Y_enc, dtype=tf.float32)
-        max_l = tf.square(tf.maximum(0., m_plus - self.y_probs), name='max_l') # (B,10)
-        max_r = tf.square(tf.maximum(0., self.y_probs - m_minus), name='max_r') # (B,10)
-        L = tf.add(T_k * max_l, lambda_ * (1 - T_k) * max_r, name='L') # (B,10)
-        self.margin_loss = tf.reduce_mean(tf.reduce_sum(L, axis=-1), name='margin_loss') # (B,)
+        max_l = tf.square(tf.maximum(0., m_plus - self.y_probs), name='max_l')  # (B,10)
+        max_r = tf.square(tf.maximum(0., self.y_probs - m_minus), name='max_r')  # (B,10)
+        L = tf.add(T_k * max_l, lambda_ * (1 - T_k) * max_r, name='L')  # (B,10)
+        self.margin_loss = tf.reduce_mean(tf.reduce_sum(L, axis=-1), name='margin_loss')  # (B,)
 
         # reconstruction loss
 
@@ -181,7 +171,7 @@ class CapsNet:
 
         # Add reconstructed image
         reconstructed_image = tf.reshape(
-            self.decoder_output, shape=[self.batch_size, self.height, self.width, self.channels])
+            self.decoder_output, shape=[-1, self.height, self.width, self.channels])
         train_summary.append(tf.summary.image('reconstructed_image', reconstructed_image))
 
         self.train_summary = tf.summary.merge(train_summary)
