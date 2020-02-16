@@ -1,5 +1,2 @@
-.idea
-*.pyc
-train_logs/
-net-model/
-data/
+!*.py
+!report/
