@@ -18,7 +18,7 @@ class Engine:
         self.model = CapsNet(is_training=is_training)
         self.saver = None
 
-        # see: https://medium.com/@liyin2015/tensorflow-cpus-and-gpus-configuration-9c223436d4ef
+        # see https://medium.com/@liyin2015/tensorflow-cpus-and-gpus-configuration-9c223436d4ef
         self.config = tf.ConfigProto()
         self.config.gpu_options.allow_growth = True
         self.config.gpu_options.per_process_gpu_memory_fraction = 0.9
@@ -58,7 +58,7 @@ class Engine:
                     end = min(num_train_samples, start + self.batch_size)
 
                     # Run the training operation and measure the loss
-                    _, global_step, train_loss, train_acc, _summary = sess.run(
+                    _, global_step, train_loss, train_acc, train_summary = sess.run(
                         [self.model.train_op,
                          self.model.global_step,
                          self.model.total_loss,
@@ -71,7 +71,7 @@ class Engine:
                     print('batch {}/{}, loss: {}, accuracy: {:.2f}%'.format(
                         train_iter+1, num_train_batches, train_loss, train_acc))
 
-                    train_writer.add_summary(_summary, global_step)
+                    train_writer.add_summary(train_summary, global_step)
 
                 # Do validation at the end of each epoch
                 print('start validation for epoch {}'.format(epoch + 1))
@@ -81,18 +81,17 @@ class Engine:
                     start = val_iter * self.batch_size
                     end = start + self.batch_size
 
-                    _, global_step, train_loss, train_acc, _summary = sess.run(
+                    _, train_loss, train_acc, valid_summary = sess.run(
                         [self.model.train_op,
-                         self.model.global_step,
                          self.model.total_loss,
                          self.model.accuracy,
-                         self.model.train_summary],
+                         self.model.valid_summary],
                         feed_dict={self.model.X: val_X[start:end], self.model.Y: val_Y[start:end]})
 
                     print('batch {}/{}, loss: {}, accuracy: {:.2f}%'.format(
                         val_iter+1, num_val_batches, train_loss, train_acc))
 
-                    train_writer.add_summary(_summary, global_step)
+                    train_writer.add_summary(valid_summary, global_step)
 
                     val_acc.append(train_acc)
                     val_loss.append(train_loss)

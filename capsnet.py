@@ -56,7 +56,8 @@ class CapsNet:
         self.compute_accuracy()
         self.loss()
         if is_training:
-            self._summary()
+            self.train_summary = self._summary(tag='train')
+            self.valid_summary = self._summary(tag='valid')
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
             self.optimizer = tf.train.AdamOptimizer()
             self.train_op = self.optimizer.minimize(self.total_loss, global_step=self.global_step, name='train_op')
@@ -158,20 +159,20 @@ class CapsNet:
         correct_pred = tf.equal(self.Y, self.y_pred, name='correct_pred')
         self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='accuracy') * 100
 
-    def _summary(self):
+    def _summary(self, tag):
         """
         Creates training summaries and returns a merged train summary instance
         """
 
         # add scalar summaries
-        train_summary = [tf.summary.scalar('train/margin_loss', self.margin_loss),
-                         tf.summary.scalar('train/reconstruction_loss', self.reconstruct_loss),
-                         tf.summary.scalar('train/total_loss', self.total_loss),
-                         tf.summary.scalar('train/accuracy', self.accuracy)]
+        summaries = [tf.summary.scalar(tag + '/margin_loss', self.margin_loss),
+                     tf.summary.scalar(tag + '/reconstruction_loss', self.reconstruct_loss),
+                     tf.summary.scalar(tag + '/total_loss', self.total_loss),
+                     tf.summary.scalar(tag + '/accuracy', self.accuracy)]
 
         # Add reconstructed image
         reconstructed_image = tf.reshape(
             self.decoder_output, shape=[-1, self.height, self.width, self.channels])
-        train_summary.append(tf.summary.image('reconstructed_image', reconstructed_image))
+        summaries.append(tf.summary.image(tag + '/reconstructed_image', reconstructed_image))
 
-        self.train_summary = tf.summary.merge(train_summary)
+        return tf.summary.merge(summaries)
