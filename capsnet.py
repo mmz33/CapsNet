@@ -173,6 +173,6 @@ class CapsNet:
         # Add reconstructed image
         reconstructed_image = tf.reshape(
             self.decoder_output, shape=[-1, self.height, self.width, self.channels])
-        summaries.append(tf.summary.image(tag + '/reconstructed_image', reconstructed_image))
+        summaries.append(tf.summary.image(tag + '/reconstructed_image', reconstructed_image, max_outputs=10))
 
         return tf.summary.merge(summaries)
