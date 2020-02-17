@@ -36,8 +36,11 @@ class Engine:
             if not self.saver:
                 self._create_saver()
             train_writer = tf.summary.FileWriter(self.tf_log_dir, sess.graph)
-            if restore_checkpoint and tf.train.checkpoint_exists(self.checkpoint_path):
-                self.saver.restore(sess, self.checkpoint_path)
+            # TODO: check first if checkpoint exists
+            if restore_checkpoint:
+                print('restoring latest checkpoint')
+                checkpoint_dir = tf.train.latest_checkpoint(os.path.dirname(self.checkpoint_path))
+                self.saver.restore(sess, checkpoint_dir)
             else:
                 print('initializing variables...')
                 sess.run(tf.global_variables_initializer())
@@ -109,8 +112,8 @@ class Engine:
         with tf.Session(config=self.config) as sess:
             if not self.saver:
                 self._create_saver()
-            #sess.run(tf.global_variables_initializer())
-            self.saver.restore(sess=sess, save_path=tf.train.latest_checkpoint('./net-model'))
+            checkpoint_dir = os.path.dirname(self.checkpoint_path)
+            self.saver.restore(sess=sess, save_path=tf.train.latest_checkpoint(checkpoint_dir))
             num_samples = test_X.shape[0]
             num_iters = num_samples // self.batch_size
             test_loss = []
