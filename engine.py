@@ -36,8 +36,8 @@ class Engine:
             if not self.saver:
                 self._create_saver()
             train_writer = tf.summary.FileWriter(self.tf_log_dir, sess.graph)
-            # TODO: check first if checkpoint exists
-            if restore_checkpoint:
+            # TODO: test     
+            if restore_checkpoint and tf.train.checkpoint_exists(self.checkpoint_path):
                 print('restoring latest checkpoint')
                 checkpoint_dir = tf.train.latest_checkpoint(os.path.dirname(self.checkpoint_path))
                 self.saver.restore(sess, checkpoint_dir)
