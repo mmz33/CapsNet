@@ -26,7 +26,7 @@ class Engine:
     def _create_saver(self):
         self.saver = tf.train.Saver()
 
-    def train(self, restore_checkpoint=True):
+    def train(self, restore_checkpoint): 
         print('training...')
         train_X, train_Y = self.datasets.train
         val_X, val_Y = self.datasets.val
