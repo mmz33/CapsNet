@@ -46,10 +46,10 @@ class Engine:
                 sess.run(tf.global_variables_initializer())
 
             num_train_samples = train_X.shape[0]
-            num_train_batches = num_train_samples // self.batch_size
+            num_train_batches = (num_train_samples + self.batch_size - 1) // self.batch_size
 
             num_val_samples = val_X.shape[0]
-            num_val_batches = num_val_samples // self.batch_size
+            num_val_batches = (num_val_samples + self.batch_size - 1) // self.batch_size
 
             for epoch in range(self.num_epochs):
                 print('training epoch {}'.format(epoch + 1))
@@ -102,7 +102,8 @@ class Engine:
                 print('val loss: {}, val accuracy: {:.2f}%'.format(total_loss, total_acc))
 
                 if total_loss < best_loss_val:
-                    self.saver.save(sess=sess, save_path=save_filename, global_step=global_step)
+                    chkpt_name= save_filename + '-epoch{}'.format(epoch + 1)
+                    self.saver.save(sess=sess, save_path=chkpt_name, global_step=global_step)
                     best_loss_val = total_loss
 
     def test(self):
@@ -114,7 +115,7 @@ class Engine:
             checkpoint_dir = os.path.dirname(self.checkpoint_path)
             self.saver.restore(sess=sess, save_path=tf.train.latest_checkpoint(checkpoint_dir))
             num_samples = test_X.shape[0]
-            num_iters = num_samples // self.batch_size
+            num_iters = (num_samples + self.batch_size - 1) // self.batch_size
             test_loss = []
             test_acc = []
             for test_iter in range(num_iters):
