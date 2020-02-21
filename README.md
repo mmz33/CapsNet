@@ -1,6 +1,6 @@
 # Capsule Network (CapsNet)
 
-This repository is a TensorFlow implementation of capsule network. For more details about CapsNet, you can check my [blog post](https://mmz33.github.io/Capsule-Networks/). you can also find [here](https://github.com/mmz33/CapsNet/blob/master/report/capsnet_seminar_report.pdf) a detailed report about this topic.
+This repository represents a TensorFlow implementation of capsule network. For more details about CapsNet, you can check my [blog post](https://mmz33.github.io/Capsule-Networks/). you can also find [here](https://github.com/mmz33/CapsNet/blob/master/report/capsnet_seminar_report.pdf) a detailed report about this topic.
 
 ## Files
 - `dataset.py`: loads the MNIST dataset using keras API
