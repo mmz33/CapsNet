@@ -8,9 +8,19 @@ import os
 class Engine:
 
     def __init__(self, datasets):
+        """
+        :param datasets: A namedTuple, representation of the dataset
+        """
         self.datasets = datasets
 
     def init_engine(self, is_training=True):
+        """
+        This function initialize the engine from the config by extracting some parameters
+        It also create a saver and the config proto for training configuration
+
+        :param is_training:
+        :return:
+        """
         self.tf_log_dir = get_from_config('log')
         self.checkpoint_path = get_from_config('checkpoint_path')
         self.batch_size = get_from_config('batch_size')
@@ -18,15 +28,23 @@ class Engine:
         self.model = CapsNet(is_training=is_training)
         self.saver = None
 
+        self.create_config_proto()
+
+    def _create_saver(self):
+        self.saver = tf.train.Saver()
+
+    def create_config_proto(self):
         # see https://medium.com/@liyin2015/tensorflow-cpus-and-gpus-configuration-9c223436d4ef
         self.config = tf.ConfigProto()
         self.config.gpu_options.allow_growth = True
         self.config.gpu_options.per_process_gpu_memory_fraction = 0.9
 
-    def _create_saver(self):
-        self.saver = tf.train.Saver()
+    def train(self, restore_checkpoint):
+        """
+        Train CapsNet
 
-    def train(self, restore_checkpoint): 
+        :param restore_checkpoint: A bool, if True the latest checkpoint is loaded
+        """
         print('training...')
         train_X, train_Y = self.datasets.train
         val_X, val_Y = self.datasets.val
@@ -36,7 +54,7 @@ class Engine:
             if not self.saver:
                 self._create_saver()
             train_writer = tf.summary.FileWriter(self.tf_log_dir, sess.graph)
-            # TODO: test     
+            # TODO: test
             if restore_checkpoint and tf.train.checkpoint_exists(self.checkpoint_path):
                 print('restoring latest checkpoint')
                 checkpoint_dir = tf.train.latest_checkpoint(os.path.dirname(self.checkpoint_path))
@@ -107,6 +125,9 @@ class Engine:
                     best_loss_val = total_loss
 
     def test(self):
+        """
+        Test CapsNet
+        """
         print('testing...')
         test_X, test_Y = self.datasets.test
         with tf.Session(config=self.config) as sess:
@@ -129,3 +150,31 @@ class Engine:
                 test_loss += [loss]
             print('Test accuracy: {}'.format(np.mean(test_acc)))
             print('Test loss: {}'.format(np.mean(test_loss)))
+
+    def test_kaggle(self):
+        """
+        A simple wrapper to test kaggle digit recognizer task
+        Task: https://www.kaggle.com/c/digit-recognizer/overview
+        see also: run_kaggle.py
+        """
+        print('Run kaggle test...')
+        test_X = self.datasets.test
+        with tf.Session(config=self.config) as sess:
+            if not self.saver:
+                self._create_saver()
+            checkpoint_dir = os.path.dirname(self.checkpoint_path)
+            self.saver.restore(sess=sess, save_path=tf.train.latest_checkpoint(checkpoint_dir))
+            num_samples = test_X.shape[0]
+            num_iters = (num_samples + self.batch_size - 1) // self.batch_size
+            out_file = open('submission.csv', 'w')
+            out_file.write('ImageId,Label\n')
+            preds = []
+            for test_iter in range(num_iters):
+                start = test_iter * self.batch_size
+                end = min(num_samples, start + self.batch_size)
+                pred = sess.run(self.model.y_pred, feed_dict={self.model.X: test_X[start:end]})
+                preds.extend(pred)
+                print('Finished batch {}/{}'.format(test_iter + 1, num_iters))
+            for i, pred in enumerate(preds):
+                out_file.write(str(i + 1) + "," + str(pred) + '\n')
+            out_file.close()
