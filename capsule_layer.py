@@ -106,7 +106,6 @@ class CapsuleLayer:
 
         rounds = get_from_config('routing_iterations')
 
-        # TODO: use tf.while_loop
         v_j = None
         for r_iter in range(rounds):
             c_i = tf.nn.softmax(b_ij, axis=2, name='weighting_coefficients')  # (B,1152,10,1,1)
